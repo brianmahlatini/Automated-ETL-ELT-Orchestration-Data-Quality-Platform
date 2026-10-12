@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: etl
+      POSTGRES_PASSWORD: etl
+      POSTGRES_DB: lakehouse
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etl -d lakehouse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow:
+    image: apache/airflow:2.10.2-python3.11
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://etl:etl@postgres:5432/lakehouse
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      _PIP_ADDITIONAL_REQUIREMENTS: psycopg[binary]==3.2.2
+      PIPELINE_DATABASE_URL: postgresql://etl:etl@postgres:5432/lakehouse
+      RAW_DATA_DIR: /opt/airflow/data/raw
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/include:/opt/airflow/include
+      - ./data:/opt/airflow/data
+      - ./sql:/opt/airflow/sql
+    command: >
+      bash -c "airflow db migrate &&
+               airflow users create --username admin --password admin --firstname Data --lastname Engineer --role Admin --email admin@example.com || true &&
+               airflow standalone"
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql://etl:etl@postgres:5432/lakehouse
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

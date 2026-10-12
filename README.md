@@ -193,20 +193,59 @@ FastAPI metrics API
 React reliability dashboard
 ```
 
-## Repository Structure
+## Project Structure
 
 ```text
-airflow/dags/              Airflow orchestration DAG
-airflow/include/           Pipeline helpers shared by DAG tasks
-backend/app/               FastAPI backend
-backend/tests/             Pytest backend tests
-frontend/src/              React dashboard
-sql/migrations/            PostgreSQL schema
-sql/models/                SQL transformations
-sql/quality/               Data quality checks
-scripts/                   Data generation and reliability demo
-infra/k8s/                 Kubernetes manifests
-.github/workflows/         CI pipeline
+.
+|-- airflow/
+|   |-- dags/
+|   |   `-- commerce_pipeline.py
+|   `-- include/
+|       |-- __init__.py
+|       `-- pipeline_tasks.py
+|-- backend/
+|   |-- app/
+|   |   |-- __init__.py
+|   |   |-- db.py
+|   |   `-- main.py
+|   |-- tests/
+|   |   `-- test_api.py
+|   |-- Dockerfile
+|   `-- requirements.txt
+|-- data/
+|   `-- sample/
+|       |-- batch_bad.jsonl
+|       `-- batch_good.jsonl
+|-- frontend/
+|   |-- src/
+|   |   |-- App.jsx
+|   |   `-- styles.css
+|   |-- Dockerfile
+|   |-- index.html
+|   |-- package-lock.json
+|   `-- package.json
+|-- infra/
+|   `-- k8s/
+|       |-- api.yaml
+|       |-- frontend.yaml
+|       |-- postgres.yaml
+|       `-- secrets.example.yaml
+|-- scripts/
+|   |-- generate_data.py
+|   `-- reliability_demo.py
+|-- sql/
+|   |-- migrations/
+|   |   `-- 001_init.sql
+|   |-- models/
+|   |   `-- mart_daily_sales.sql
+|   `-- quality/
+|       `-- checks.sql
+|-- .github/
+|   `-- workflows/
+|       `-- ci.yml
+|-- .gitignore
+|-- docker-compose.yml
+`-- README.md
 ```
 
 ## Quick Start

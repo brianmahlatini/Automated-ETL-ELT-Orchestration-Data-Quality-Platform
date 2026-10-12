@@ -1,31 +1,197 @@
 # Automated ETL/ELT Orchestration & Data Quality Platform
 
-Senior-level data engineering project showing a dependable, scheduled ETL/ELT pipeline with Airflow, Python, SQL, PostgreSQL, FastAPI, React, Docker, Kubernetes and GitHub Actions.
+## Project Overview
 
-## What This Builds
+This project builds a dependable data pipeline that runs automatically, validates its output and can recover from failed runs. It uses generated commerce event data to demonstrate ingestion, orchestration, incremental loading, SQL transformations, data quality checks, monitoring and deployment readiness.
 
-The platform ingests synthetic commerce events, lands them as raw data, loads them idempotently into PostgreSQL, transforms them into analytics tables, validates data quality and exposes operational status through a FastAPI backend and React dashboard.
+The pipeline ingests event data, loads it into PostgreSQL, transforms it into analytics tables, checks data quality and exposes pipeline health through a FastAPI backend and React dashboard.
+
+## Tech Stack
+
+| Area | Technology |
+| --- | --- |
+| Orchestration | Apache Airflow |
+| Backend | Python, FastAPI |
+| Frontend | React, Vite |
+| Database | PostgreSQL |
+| Transformations | SQL |
+| Data Quality | SQL checks, Python validation |
+| Containerisation | Docker, Docker Compose |
+| Deployment | Kubernetes manifests |
+| CI/CD | GitHub Actions |
+| Source Control | Git, GitHub |
+| Cloud-ready Storage | AWS S3-ready landing design |
+
+## Project Requirements And Implementation
+
+### 1. Ingest Data From An API Or Files Into PostgreSQL Or S3
+
+The project generates synthetic commerce event data as JSONL files. Airflow ingests these files and loads valid records into PostgreSQL.
+
+Implemented in:
+
+- `scripts/generate_data.py`
+- `scripts/reliability_demo.py`
+- `airflow/include/pipeline_tasks.py`
+- `sql/migrations/001_init.sql`
+
+### 2. Orchestrate Dependencies And Schedules With Airflow DAGs
+
+The Airflow DAG runs on an hourly schedule and controls the full dependency chain:
+
+```text
+extract -> load -> transform -> validate
+```
+
+Implemented in:
+
+- `airflow/dags/commerce_pipeline.py`
+
+Airflow features used:
+
+- Scheduled runs
+- Catchup/backfills
+- Retries
+- Failure callback alerting
+- Task dependencies
+- Execution timeout protection
+
+### 3. Use Python And SQL For Transformations
+
+Python is used for ingestion, validation and loading. SQL is used for analytics transformations and quality checks.
+
+Implemented in:
+
+- `airflow/include/pipeline_tasks.py`
+- `sql/models/mart_daily_sales.sql`
+- `sql/quality/checks.sql`
+
+### 4. Implement Incremental Loads And Idempotent Reruns
+
+The pipeline stores a watermark in PostgreSQL and only processes records newer than the latest loaded `event_timestamp`.
+
+Idempotency is handled with:
+
+- `event_id` as the primary key
+- PostgreSQL `ON CONFLICT` upserts
+- Pipeline watermarks
+- Repeatable Airflow reruns
+
+Implemented in:
+
+- `pipeline_watermarks` table
+- `raw_events` table
+- `load_incremental()` in `airflow/include/pipeline_tasks.py`
+
+### 5. Add Retries, Backfills, Logging, Alerts And Failure Recovery
+
+The DAG includes:
+
+- `retries=3`
+- `retry_delay=2 minutes`
+- `catchup=True`
+- `on_failure_callback`
+- Pipeline run metrics
+- Rejected record quarantine
+
+Failed or invalid records are stored in `dq_violations`, while run outcomes are tracked in `pipeline_run_metrics`.
+
+### 6. Test Schema Changes, Duplicates, Missing Values And Data Freshness
+
+Data quality checks include:
+
+- Missing customer IDs
+- Negative order amounts
+- Freshness checks
+- Duplicate protection through primary keys
+- Rejected record capture
+
+Implemented in:
+
+- `sql/quality/checks.sql`
+- `dq_results`
+- `dq_violations`
+- `backend/tests/test_api.py`
+
+### 7. Containerise The Environment With Docker
+
+The full local environment runs with Docker Compose.
+
+Services:
+
+- PostgreSQL
+- Airflow
+- FastAPI backend
+- React frontend
+
+Run locally:
+
+```bash
+docker compose up --build
+```
+
+### 8. Use GitHub Actions For Automated Tests And CI/CD Checks
+
+GitHub Actions runs automated checks on push and pull request.
+
+CI checks:
+
+- Install backend dependencies
+- Run Python tests
+- Compile backend and DAG Python files
+- Install frontend dependencies
+- Build React frontend
+
+Implemented in:
+
+- `.github/workflows/ci.yml`
+
+## Senior-Level Evidence
+
+This project demonstrates senior-level engineering through:
+
+- Incremental loading with database watermarks.
+- Idempotent reruns using primary keys and upserts.
+- Quarantine handling for invalid records.
+- Airflow retries and failure callbacks.
+- Separate raw, quality, metrics and mart tables.
+- A monitoring API for operational visibility.
+- A frontend reliability dashboard.
+- Docker-based local reproducibility.
+- Kubernetes deployment manifests.
+- CI checks for backend, DAG and frontend changes.
+
+To demonstrate a failed run, generate a bad batch:
+
+```bash
+python scripts/reliability_demo.py
+```
+
+The bad batch includes duplicate event IDs, missing customer IDs and invalid negative amounts. The pipeline records rejected rows in `dq_violations`, writes rule outcomes to `dq_results` and keeps successful loads idempotent through `event_id` upserts.
 
 ## Architecture
 
 ```text
-Generated/API data -> Airflow DAG -> Raw landing -> PostgreSQL staging -> SQL marts
-                                      |                  |
-                                      v                  v
-                                 quality checks -> pipeline_run_metrics -> FastAPI -> React
+Generated JSONL data
+        |
+        v
+Apache Airflow DAG
+        |
+        v
+PostgreSQL raw_events
+        |
+        v
+SQL transformation marts
+        |
+        v
+Data quality checks
+        |
+        v
+FastAPI metrics API
+        |
+        v
+React reliability dashboard
 ```
-
-Core features:
-
-- Automated Airflow DAG with retries, backfills, SLAs and failure callbacks.
-- Incremental loads using `event_timestamp` watermarks and idempotent `ON CONFLICT` upserts.
-- PostgreSQL migrations, staging tables, dimensional marts and quality result tables.
-- Data quality checks for schema drift, duplicates, missing values and freshness.
-- Failure recovery through retryable extract/load tasks, quarantine tables and rerunnable DAG runs.
-- FastAPI service for pipeline health, run metrics and data quality summaries.
-- React dashboard for operational monitoring.
-- Docker Compose for local development and Kubernetes manifests for deployment.
-- GitHub Actions for backend tests, SQL lint-style validation and frontend build checks.
 
 ## Repository Structure
 
@@ -33,14 +199,14 @@ Core features:
 airflow/dags/              Airflow orchestration DAG
 airflow/include/           Pipeline helpers shared by DAG tasks
 backend/app/               FastAPI backend
-backend/tests/             Pytest coverage for API and quality logic
+backend/tests/             Pytest backend tests
 frontend/src/              React dashboard
 sql/migrations/            PostgreSQL schema
-sql/models/                ELT SQL transformations
-sql/quality/               Data quality SQL checks
-scripts/                   Data generation and local reliability demo
+sql/models/                SQL transformations
+sql/quality/               Data quality checks
+scripts/                   Data generation and reliability demo
 infra/k8s/                 Kubernetes manifests
-.github/workflows/         CI checks
+.github/workflows/         CI pipeline
 ```
 
 ## Quick Start
@@ -49,14 +215,12 @@ infra/k8s/                 Kubernetes manifests
 docker compose up --build
 ```
 
-Services:
+Local services:
 
 - Airflow UI: `http://localhost:8080`
-- FastAPI: `http://localhost:8000/docs`
+- FastAPI docs: `http://localhost:8000/docs`
 - React dashboard: `http://localhost:5173`
 - PostgreSQL: `localhost:5432`
-
-Default local credentials are defined in `docker-compose.yml`.
 
 ## Run The Pipeline
 
@@ -66,63 +230,17 @@ Default local credentials are defined in `docker-compose.yml`.
    docker compose up --build
    ```
 
-2. Open Airflow and enable `commerce_incremental_quality_pipeline`.
-3. Trigger a manual run or let the hourly schedule run.
-4. View run health in the React dashboard.
-
-## Demonstrating Failure And Recovery
-
-Run the reliability demo:
-
-```bash
-python scripts/reliability_demo.py
-```
-
-The demo generates two batches:
-
-- `batch_good.jsonl` contains valid events.
-- `batch_bad.jsonl` intentionally includes duplicate IDs, missing customer IDs and stale timestamps.
-
-Expected behavior:
-
-- The load task remains idempotent because `event_id` is the primary key.
-- Duplicate records are rejected or upserted without double-counting.
-- Bad records are written to `dq_violations` with the failed rule.
-- Airflow retries transient failures automatically.
-- A rerun with corrected data only processes records above the stored watermark.
-
-Example reliability evidence to include in your portfolio:
-
-```text
-Failed run: freshness_check failed because max(event_timestamp) was older than 24 hours.
-Recovery: replacement batch was landed, DAG rerun used the same run_id and idempotent upsert keys.
-Result: final mart row count stayed stable, duplicates remained 0 and freshness returned to 11 minutes.
-Measured result: 10,000 generated events loaded in under 5 seconds locally with p95 API health endpoint below 50 ms.
-```
-
-## Data Quality Rules
-
-- `schema_contract`: required fields and expected types must exist.
-- `duplicate_event_id`: no duplicate event IDs in staging.
-- `missing_customer_id`: customer ID must be present.
-- `freshness`: latest accepted event must be within 24 hours.
-- `non_negative_amount`: order amount must be greater than or equal to zero.
-
-## CI/CD
-
-GitHub Actions runs on every push and pull request:
-
-- Python unit tests with `pytest`.
-- Static syntax checks for DAGs and backend modules.
-- Frontend install and production build.
-- SQL file presence and migration smoke checks.
+2. Open the Airflow UI.
+3. Enable `commerce_incremental_quality_pipeline`.
+4. Trigger a manual run or wait for the hourly schedule.
+5. Check quality and reliability metrics in the React dashboard.
 
 ## Kubernetes
 
-Apply the deployment manifests after building and pushing images:
+Kubernetes manifests are included for deployment readiness.
 
 ```bash
 kubectl apply -f infra/k8s/
 ```
 
-The manifests include API, frontend and PostgreSQL resources suitable for a portfolio-grade cluster demo. In production, replace the PostgreSQL deployment with a managed database and store secrets in your cloud secret manager.
+For production, replace the demo PostgreSQL deployment with a managed database and store credentials in a cloud secret manager.
